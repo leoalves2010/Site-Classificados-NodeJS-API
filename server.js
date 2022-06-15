@@ -10,6 +10,9 @@ const mongoose = require('mongoose');
 // para habilitar permissões de acesso às nossas APIs no navegador
 const cors = require('cors');
 
+// importa o arquivo de rotas do sistema
+const apiRoutes = require('./src/routes');
+
 // para auxiliar no upload de arquivos
 const fileUpload = require('express-fileupload');
 
@@ -44,10 +47,8 @@ server.use(fileUpload({
 // informa a pasta pública do nosso projeto
 server.use(express.static(path.join(__dirname, '/public')));
 
-// nossa primeira rota para teste do sistema
-server.get('/ping', (req, res) => {
-    res.json({pong: true});
-});
+// indica para nossa aplicação qual arquivo de rotas nós iremos utilizar
+server.use('/', apiRoutes);
 
 // habilita e inicia o servidor na porta especificada no .env
 server.listen(process.env.PORT, () => {
