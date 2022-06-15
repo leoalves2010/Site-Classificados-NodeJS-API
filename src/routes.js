@@ -5,6 +5,8 @@ const AdsController = require('./controllers/AdsController');
 const AuthController = require('./controllers/AuthController');
 const UserController = require('./controllers/UserController');
 
+const Auth = require('./middlewares/Auth');
+
 router.get('/ping', (req, res) => {
     res.json({pong: true});
 });
@@ -12,7 +14,7 @@ router.get('/ping', (req, res) => {
 router.post('/user/signin', AuthController.signIn);
 router.post('/user/signup', AuthController.signUp);
 
-router.get('/states', UserController.getStates);
+router.get('/states', Auth.private, UserController.getStates);
 router.get('/user/me', UserController.getInfo);
 router.put('/user/me', UserController.editAction);
 
