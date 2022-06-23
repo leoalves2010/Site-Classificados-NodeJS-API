@@ -25,5 +25,19 @@ module.exports = {
             notEmpty: true,
             errorMessage: `State can't be empty`
         }
+    }),
+    signIn: checkSchema({
+        email: {
+            isEmail: true,
+            normalizeEmail: true,
+            errorMessage: `Email invalid`
+        },
+        password: {
+            trim: true,
+            isLength: {
+                options: { min: 3 }
+            },
+            errorMessage: `Password should be at least 3 chars long`
+        }
     })
 }

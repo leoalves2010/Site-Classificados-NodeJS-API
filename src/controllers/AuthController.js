@@ -6,7 +6,44 @@ const User = require("../models/User");
 const State = require("../models/State");
 
 module.exports = {
-    signIn: async (req, res) => {},
+    signIn: async (req, res) => {
+        const errors = validationResult(req);
+
+        if (!errors.isEmpty()) {
+            res.json({ errors: errors.mapped() });
+            return;
+        }
+
+        const data = matchedData(req);
+
+        // Validação do e-mail
+        const user = await User.findOne({ email: data.email });
+        if (user) {
+            // Validação da senha
+            const match = await bcrypt.compare(
+                data.password,
+                user.passwordHash
+            );
+            if (match) {
+                // Realiza o login do usuário no sistema
+                const payload = (Date.now() + Math.random()).toString();
+                const token = await bcrypt.hash(payload, 10);
+
+                user.token = token;
+                await user.save();
+
+                res.json({
+                    email: user.email,
+                    token: user.token,
+                });
+                return;
+            }
+        }
+
+        // Retorno caso ocorra algum erro com a validação do e-mail e/ou senha informados pelo usuário
+        res.json({ error: "E-mail e/ou senha inválidos." });
+        return;
+    },
     signUp: async (req, res) => {
         const errors = validationResult(req);
 

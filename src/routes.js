@@ -12,7 +12,7 @@ router.get('/ping', (req, res) => {
     res.json({pong: true});
 });
 
-router.post('/user/signin', AuthController.signIn);
+router.post('/user/signin', AuthValidator.signIn, AuthController.signIn);
 router.post('/user/signup', AuthValidator.signUp, AuthController.signUp);
 
 router.get('/states', UserController.getStates);
