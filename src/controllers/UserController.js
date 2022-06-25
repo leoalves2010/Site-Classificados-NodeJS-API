@@ -1,3 +1,6 @@
+const { validationResult, matchedData } = require("express-validator");
+const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
 const State = require('../models/State');
 const User = require('../models/User');
 const Ad = require('../models/Ad');
@@ -34,6 +37,46 @@ module.exports = {
         return;
     },
     editAction: async (req, res) => {
+        const errors = validationResult(req);
+
+        if (!errors.isEmpty()) {
+            res.json({ errors: errors.mapped() });
+            return;
+        }
+
+        const data = matchedData(req);
+
+        const updates = {}
+
+        if(data.name){
+            updates.name = data.name;
+        }
+
+        if(data.email){
+            updates.email = data.email;
+        }
+
+        if(data.password){
+            updates.password = await bcrypt.hash(data.password, 10);
+        }
+
+        if(data.state){
+            if(mongoose.isValidObjectId(data.state)){
+                const state = await State.findById({ _id: data.state });
+                if (!state) {
+                    res.json({error: "O 'Estado' informado no cadastro é inválido/inexistente."});
+                    return;
+                }
+                updates.state = data.state;
+            } else {
+                res.json({error: "Código de 'Estado' inválido."});
+                return;
+            }
+        }
         
+        await User.findOneAndUpdate({token: data.token}, {$set: updates})
+        
+        res.json({});
+        return;
     }
 }
