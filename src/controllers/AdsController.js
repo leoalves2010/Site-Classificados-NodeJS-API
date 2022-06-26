@@ -1,7 +1,10 @@
 const { validationResult, matchedData } = require("express-validator");
+
 const Category = require("../models/Category");
 const Ad = require("../models/Ad");
 const User = require("../models/User");
+const State = require("../models/State");
+
 const jimp = require("jimp");
 const { v4: uuid } = require("uuid");
 
@@ -37,6 +40,7 @@ module.exports = {
         }
 
         const data = matchedData(req);
+        const priceFormatted = parseFloat((data.price).replace('.', ''). replace(',', '.'));
 
         let user = await User.findOne({ token: data.token });
 
@@ -46,7 +50,7 @@ module.exports = {
             category: data.category,
             dateCreated: new Date(),
             title: data.title,
-            price: data.price,
+            price: priceFormatted,
             priceNegotiable: data.priceNegotiable == "true" ? true : false,
             description: data.description,
             views: 0,
@@ -60,10 +64,10 @@ module.exports = {
                         req.files.img.mimetype
                     )
                 ) {
-                    let img = await addImg(req.files.img.tempFilePath);
+                    let nameImg = await addImg(req.files.img.tempFilePath);
                     newAd.images.push({
-                        img,
-                        mainImg: false,
+                        name: nameImg,
+                        imgDefault: false,
                     });
                 } else {
                     res.json({ error: "Formato de arquivo inválido." });
@@ -76,10 +80,10 @@ module.exports = {
                             req.files.img[i].mimetype
                         )
                     ) {
-                        let img = await addImg(req.files.img[i].tempFilePath);
+                        let nameImg = await addImg(req.files.img[i].tempFilePath);
                         newAd.images.push({
-                            img,
-                            mainImg: false,
+                            name: nameImg,
+                            imgDefault: false,
                         });
                     } else {
                         res.json({ error: "Formato de arquivo inválido." });
@@ -89,10 +93,64 @@ module.exports = {
             }
         }
 
+        if(newAd.images.length > 0){
+            newAd.images[0].imgDefault = true;
+        }
+
         const info = await newAd.save();
         res.json({ id: info._id });
     },
-    getList: async (req, res) => {},
+    getList: async (req, res) => {
+        let {state, category, queryTitle, order = 'asc', offset = 0, limit = 10} = req.query;
+        let filters = {status: true};
+        let total = 0;
+
+        if(state){
+            let s = await State.findOne({name: state.toUpperCase()}).exec();
+            if(s){
+                filters.state = s._id.toString();
+            }
+        }
+
+        if(category){
+            let c = await Category.findOne({slug: category.toLowerCase()}).exec();
+            if(c){
+                filters.category = c._id.toString();
+            }
+        }
+
+        if(queryTitle){
+            filters.title = {$regex: queryTitle, $options: 'i'};
+        }
+
+        const adsTotal = await Ad.find(filters).exec();
+        total = adsTotal.length;
+
+        const adsData = await Ad.find(filters).sort({title: (order=='asc') ? 1 : -1}).skip(parseInt(offset)).limit(parseInt(limit)).exec();
+
+        let ads = [];
+        for (const i in adsData) {
+            let image;
+
+            let imgDefault = adsData[i].images.find(img => img.imgDefault);
+            
+            if(imgDefault){
+                image = `${process.env.BASE}/media/${imgDefault.name}`
+            }else{
+                image = `${process.env.BASE}/media/default.jpg`
+            }
+
+            ads.push({
+                id: adsData[i].id,
+                title: adsData[i].title,
+                price: adsData[i].price,
+                priceNegotiable: adsData[i].priceNegotiable,
+                image
+            });
+        }
+        res.json({ads, total});
+        return;
+    },
     getItem: async (req, res) => {},
     editAction: async (req, res) => {},
 };

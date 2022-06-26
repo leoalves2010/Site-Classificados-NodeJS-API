@@ -23,8 +23,8 @@ router.get('/user/me', Auth.private, UserController.getInfo); //ok
 router.put('/user/me', UserValidator.editAction, Auth.private, UserController.editAction); //ok
 
 router.get('/categories', AdsController.getCategories); //ok
-router.post('/ad/add', AdValidator.addActions, Auth.private, AdsController.addAction);
-router.get('/ad/list', AdsController.getList);
+router.post('/ad/add', AdValidator.addActions, Auth.private, AdsController.addAction); //ok
+router.get('/ad/list', AdsController.getList); //ok
 router.get('/ad/item', AdsController.getItem);
 router.put('/ad/:id', Auth.private, AdsController.editAction);
 

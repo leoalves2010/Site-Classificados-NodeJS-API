@@ -7,10 +7,8 @@ module.exports = {
         },
         category: {
             trim: true,
-            isLength: {
-                options: { min: 3 },
-            },
-            errorMessage: `Category should be at least 3 chars long`,
+            notEmpty: true,
+            errorMessage: `Category field is required`,
         },
         title: {
             trim: true,
