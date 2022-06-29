@@ -1,5 +1,7 @@
 const { validationResult, matchedData } = require("express-validator");
 
+const mongoose = require("mongoose");
+
 const Category = require("../models/Category");
 const Ad = require("../models/Ad");
 const User = require("../models/User");
@@ -151,6 +153,80 @@ module.exports = {
         res.json({ads, total});
         return;
     },
-    getItem: async (req, res) => {},
+    getItem: async (req, res) => {
+        let id = req.params.id;
+        let other = req.query.other || null;
+
+        if(id && mongoose.isValidObjectId(id)){
+            let ad = await Ad.findOne({status: true, _id: id}).exec();
+
+            if(ad){
+                let user = await User.findById({_id: ad.idUser}).exec();
+                let state = await State.findById({_id: ad.state}).exec();
+                let category = await Category.findById({_id: ad.category}).exec();
+
+                let images = [];
+
+                for (const i in ad.images) {
+                    images.push(`${process.env.BASE}/media/${ad.images[i].name}`);
+                }
+                
+                ad.views++;
+                await ad.save();
+
+                let others = [];
+
+                if(other){
+                    let otherData = await Ad.find({status: true, idUser: ad.idUser}).exec();
+                    
+                    for (const i in otherData) {
+                        if(otherData[i]._id.toString() != ad._id.toString()){
+                            let image = `${process.env.BASE}/media/default.jpg`;
+                            let imgDefault = otherData[i].images.find(img => img.imgDefault)
+
+                            if(imgDefault){
+                                image = `${process.env.BASE}/media/${imgDefault.name}`
+                            }
+
+                            others.push({
+                                id: otherData[i]._id,
+                                title: otherData[i].title,
+                                price: otherData[i].price,
+                                priceNegotiable: otherData[i].priceNegotiable,
+                                image
+                            });
+                        }
+                    }
+                }
+
+                res.json({
+                    userInfo: {
+                        name: user.name,
+                        email: user.email,
+                    },
+                    id: ad._id,
+                    state: state.name,
+                    category: category,
+                    images,
+                    dateCreated: ad.dateCreated,
+                    title: ad.title,
+                    price: ad.price,
+                    priceNegotiable: ad.priceNegotiable,
+                    description: ad.description,
+                    views: ad.views,
+                    others
+                });
+                return;
+            }else{
+                res.json({error: 'Anúncio não encontrado.'});
+                return;
+            }
+        }else{
+            res.json({error: 'ID inválido/inexistente.'});
+            return;
+        }
+
+
+    },
     editAction: async (req, res) => {},
 };
