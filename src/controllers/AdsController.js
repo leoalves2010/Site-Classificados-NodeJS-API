@@ -1,4 +1,5 @@
 const { validationResult, matchedData } = require("express-validator");
+const fs = require("fs").promises;
 
 const mongoose = require("mongoose");
 
@@ -15,6 +16,15 @@ let addImg = async (buffer) => {
     let tmpImg = await jimp.read(buffer);
     tmpImg.cover(500, 500).quality(80).write(`public/media/${imgName}`);
     return imgName;
+};
+
+let delImgs = async (ad) => {
+    for (const i in ad.images) {
+        await fs.unlink(`public/media/${ad.images[i].name}`, function (err) {
+            if (err) throw err;
+            return;
+        });
+    }
 };
 
 module.exports = {
@@ -42,14 +52,29 @@ module.exports = {
         }
 
         const data = matchedData(req);
-        const priceFormatted = parseFloat((data.price).replace('.', ''). replace(',', '.'));
+        const priceFormatted = parseFloat(
+            data.price.replace(".", "").replace(",", ".")
+        );
 
         let user = await User.findOne({ token: data.token });
+        let cat = '';
+
+        if(mongoose.isValidObjectId(data.category.toString())){
+            cat = await Category.findById({_id: data.category}).exec();
+
+            if(!cat){
+                res.json({ error: 'Categoria inexistente/inválida.' });
+                return;
+            }
+        }else{
+            res.json({ error: 'ID da categoria é inválido.' });
+            return;
+        }
 
         let newAd = new Ad({
             idUser: user._id,
             state: user.state,
-            category: data.category,
+            category: cat._id.toString(),
             dateCreated: new Date(),
             title: data.title,
             price: priceFormatted,
@@ -59,14 +84,14 @@ module.exports = {
             status: true,
         });
 
-        if (req.files && req.files.img) {
-            if (req.files.img.length === undefined) {
+        if (req.files && req.files.images) {
+            if (req.files.images.length === undefined) {
                 if (
                     ["image/jpeg", "image/png", "image/jpg"].includes(
-                        req.files.img.mimetype
+                        req.files.images.mimetype
                     )
                 ) {
-                    let nameImg = await addImg(req.files.img.tempFilePath);
+                    let nameImg = await addImg(req.files.images.tempFilePath);
                     newAd.images.push({
                         name: nameImg,
                         imgDefault: false,
@@ -76,13 +101,15 @@ module.exports = {
                     return;
                 }
             } else {
-                for (let i = 0; i < req.files.img.length; i++) {
+                for (let i = 0; i < req.files.images.length; i++) {
                     if (
                         ["image/jpeg", "image/png", "image/jpg"].includes(
-                            req.files.img[i].mimetype
+                            req.files.images[i].mimetype
                         )
                     ) {
-                        let nameImg = await addImg(req.files.img[i].tempFilePath);
+                        let nameImg = await addImg(
+                            req.files.images[i].tempFilePath
+                        );
                         newAd.images.push({
                             name: nameImg,
                             imgDefault: false,
@@ -95,7 +122,7 @@ module.exports = {
             }
         }
 
-        if(newAd.images.length > 0){
+        if (newAd.images.length > 0) {
             newAd.images[0].imgDefault = true;
         }
 
@@ -103,43 +130,56 @@ module.exports = {
         res.json({ id: info._id });
     },
     getList: async (req, res) => {
-        let {state, category, queryTitle, order = 'asc', offset = 0, limit = 10} = req.query;
-        let filters = {status: true};
+        let {
+            state,
+            category,
+            queryTitle,
+            order = "asc",
+            offset = 0,
+            limit = 10,
+        } = req.query;
+        let filters = { status: true };
         let total = 0;
 
-        if(state){
-            let s = await State.findOne({name: state.toUpperCase()}).exec();
-            if(s){
+        if (state) {
+            let s = await State.findOne({ name: state.toUpperCase() }).exec();
+            if (s) {
                 filters.state = s._id.toString();
             }
         }
 
-        if(category){
-            let c = await Category.findOne({slug: category.toLowerCase()}).exec();
-            if(c){
+        if (category) {
+            let c = await Category.findOne({
+                slug: category.toLowerCase(),
+            }).exec();
+            if (c) {
                 filters.category = c._id.toString();
             }
         }
 
-        if(queryTitle){
-            filters.title = {$regex: queryTitle, $options: 'i'};
+        if (queryTitle) {
+            filters.title = { $regex: queryTitle, $options: "i" };
         }
 
         const adsTotal = await Ad.find(filters).exec();
         total = adsTotal.length;
 
-        const adsData = await Ad.find(filters).sort({title: (order=='asc') ? 1 : -1}).skip(parseInt(offset)).limit(parseInt(limit)).exec();
+        const adsData = await Ad.find(filters)
+            .sort({ title: order == "asc" ? 1 : -1 })
+            .skip(parseInt(offset))
+            .limit(parseInt(limit))
+            .exec();
 
         let ads = [];
         for (const i in adsData) {
             let image;
 
-            let imgDefault = adsData[i].images.find(img => img.imgDefault);
-            
-            if(imgDefault){
-                image = `${process.env.BASE}/media/${imgDefault.name}`
-            }else{
-                image = `${process.env.BASE}/media/default.jpg`
+            let imgDefault = adsData[i].images.find((img) => img.imgDefault);
+
+            if (imgDefault) {
+                image = `${process.env.BASE}/media/${imgDefault.name}`;
+            } else {
+                image = `${process.env.BASE}/media/default.jpg`;
             }
 
             ads.push({
@@ -147,45 +187,54 @@ module.exports = {
                 title: adsData[i].title,
                 price: adsData[i].price,
                 priceNegotiable: adsData[i].priceNegotiable,
-                image
+                image,
             });
         }
-        res.json({ads, total});
+        res.json({ ads, total });
         return;
     },
     getItem: async (req, res) => {
         let id = req.params.id;
         let other = req.query.other || null;
 
-        if(id && mongoose.isValidObjectId(id)){
-            let ad = await Ad.findOne({status: true, _id: id}).exec();
+        if (id && mongoose.isValidObjectId(id)) {
+            let ad = await Ad.findOne({ status: true, _id: id }).exec();
 
-            if(ad){
-                let user = await User.findById({_id: ad.idUser}).exec();
-                let state = await State.findById({_id: ad.state}).exec();
-                let category = await Category.findById({_id: ad.category}).exec();
+            if (ad) {
+                let user = await User.findById({ _id: ad.idUser }).exec();
+                let state = await State.findById({ _id: ad.state }).exec();
+                let category = await Category.findById({
+                    _id: ad.category,
+                }).exec();
 
                 let images = [];
 
                 for (const i in ad.images) {
-                    images.push(`${process.env.BASE}/media/${ad.images[i].name}`);
+                    images.push(
+                        `${process.env.BASE}/media/${ad.images[i].name}`
+                    );
                 }
-                
+
                 ad.views++;
                 await ad.save();
 
                 let others = [];
 
-                if(other){
-                    let otherData = await Ad.find({status: true, idUser: ad.idUser}).exec();
-                    
-                    for (const i in otherData) {
-                        if(otherData[i]._id.toString() != ad._id.toString()){
-                            let image = `${process.env.BASE}/media/default.jpg`;
-                            let imgDefault = otherData[i].images.find(img => img.imgDefault)
+                if (other) {
+                    let otherData = await Ad.find({
+                        status: true,
+                        idUser: ad.idUser,
+                    }).exec();
 
-                            if(imgDefault){
-                                image = `${process.env.BASE}/media/${imgDefault.name}`
+                    for (const i in otherData) {
+                        if (otherData[i]._id.toString() != ad._id.toString()) {
+                            let image = `${process.env.BASE}/media/default.jpg`;
+                            let imgDefault = otherData[i].images.find(
+                                (img) => img.imgDefault
+                            );
+
+                            if (imgDefault) {
+                                image = `${process.env.BASE}/media/${imgDefault.name}`;
                             }
 
                             others.push({
@@ -193,7 +242,7 @@ module.exports = {
                                 title: otherData[i].title,
                                 price: otherData[i].price,
                                 priceNegotiable: otherData[i].priceNegotiable,
-                                image
+                                image,
                             });
                         }
                     }
@@ -214,19 +263,150 @@ module.exports = {
                     priceNegotiable: ad.priceNegotiable,
                     description: ad.description,
                     views: ad.views,
-                    others
+                    others,
                 });
                 return;
-            }else{
-                res.json({error: 'Anúncio não encontrado.'});
+            } else {
+                res.json({ error: "Anúncio não encontrado." });
                 return;
             }
-        }else{
-            res.json({error: 'ID inválido/inexistente.'});
+        } else {
+            res.json({ error: "ID inválido/inexistente." });
             return;
         }
-
-
     },
-    editAction: async (req, res) => {},
+    editAction: async (req, res) => {
+        let { id } = req.params;
+        let {
+            category,
+            title,
+            price,
+            priceNegotiable,
+            description,
+            status,
+            token,
+        } = req.body;
+
+        if (id && mongoose.isValidObjectId(id)) {
+            let ad = await Ad.findById(id).exec();
+            if (ad) {
+                let user = await User.findOne({ token }).exec();
+                if (user && user._id.toString() === ad.idUser.toString()) {
+                    let fieldsUpdates = {};
+
+                    if (req.files && req.files.images) {
+                        let { images } = req.files;
+                        let imgs = [];
+
+                        if (images.length === undefined) {
+                            if (
+                                [
+                                    "image/jpeg",
+                                    "image/png",
+                                    "image/jpg",
+                                ].includes(images.mimetype)
+                            ) {
+                                let nameImg = await addImg(images.tempFilePath);
+                                imgs.push({
+                                    name: nameImg,
+                                    imgDefault: false,
+                                });
+                            } else {
+                                res.json({
+                                    error: "Formato de arquivo inválido.",
+                                });
+                                return;
+                            }
+                        } else {
+                            for (let i = 0; i < images.length; i++) {
+                                if (
+                                    [
+                                        "image/jpeg",
+                                        "image/png",
+                                        "image/jpg",
+                                    ].includes(images[i].mimetype)
+                                ) {
+                                    let nameImg = await addImg(
+                                        images[i].tempFilePath
+                                    );
+                                    imgs.push({
+                                        name: nameImg,
+                                        imgDefault: false,
+                                    });
+                                } else {
+                                    res.json({
+                                        error: "Formato de arquivo inválido.",
+                                    });
+                                    return;
+                                }
+                            }
+                        }
+
+                        if (imgs.length > 0) {
+                            imgs[0].imgDefault = true;
+                        }
+
+                        await delImgs(ad);
+
+                        fieldsUpdates.images = imgs;
+                    }
+
+                    if (category) {
+                        let c = await Category.findOne({
+                            slug: category.toLowerCase().trim(),
+                        }).exec();
+                        if (c) {
+                            fieldsUpdates.category = c._id.toString();
+                        } else {
+                            res.json({
+                                error: "Categoria inválida/não encontrada.",
+                            });
+                            return;
+                        }
+                    }
+
+                    if (title) {
+                        fieldsUpdates.title = title.trim();
+                    }
+
+                    if (price) {
+                        priceFormatted = parseFloat(
+                            price.replace(".", "").replace(",", ".")
+                        );
+                        fieldsUpdates.price = priceFormatted;
+                    }
+
+                    if (priceNegotiable) {
+                        fieldsUpdates.priceNegotiable = priceNegotiable;
+                    }
+
+                    if (description) {
+                        fieldsUpdates.description = description.trim();
+                    }
+
+                    if (status) {
+                        fieldsUpdates.status = status;
+                    }
+
+                    await Ad.findByIdAndUpdate(id, {
+                        $set: fieldsUpdates,
+                    }).exec();
+
+                    res.json({ success: "Anúncio modificado com sucesso." });
+                    return;
+                } else {
+                    res.json({
+                        error: "Anúncio não pertence ao usuário especificado.",
+                    });
+                    return;
+                }
+            } else {
+                res.json({ error: "Anúncio não encontrado." });
+                return;
+            }
+        } else {
+            res.json({ error: "ID inválido/inexistente." });
+            return;
+        }
+    },
 };

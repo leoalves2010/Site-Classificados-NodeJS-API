@@ -7,8 +7,10 @@ module.exports = {
         },
         category: {
             trim: true,
-            notEmpty: true,
-            errorMessage: `Category field is required`,
+            isLength: {
+                options: { min: 12 },
+            },
+            errorMessage: `Category ID should be at least 12 chars long`,
         },
         title: {
             trim: true,
